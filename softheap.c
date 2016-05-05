@@ -116,6 +116,7 @@ static node *combine(node *x, node *y, int r) {
   z->right = y;
   z->rank = x->rank + 1;
   z->nelems = 0;
+  z->first = z->last = NULL;
 
   z->size = (z->rank <= r ? 1 : (3 * x->size + 1)/2);
   sift(z);
@@ -232,35 +233,6 @@ static int extract_elem(node *x) {
   return result;
 }
 
-static int extract_min(softheap *P) {
-  if(empty(P)) error(1,0, "Tried to extract an element from an empty soft heap");
-  
-  tree *T = P->first->sufmin; // tree with lowest root ckey
-  node *x = T->root;
-  int e = extract_elem(x);
-
-  if(x->nelems <= x->size / 2) { // x is deficient; rescue it if possible
-    if(!leaf(x)) {
-      sift(x);
-      update_suffix_min(T);
-    } else if(x->nelems == 0) { // x is a leaf and empty; it must be destroyed
-      free(x);
-      remove_tree(P, T);
-      if(T->next == NULL) { // we removed the highest-ranked tree; reset rank and clean up
-        if(T->prev == NULL) P->rank = -1; // Heap now empty. Rank -1 is sentinel for future melds
-        else {
-          P->rank = T->prev->rank;
-          update_suffix_min(T->prev);
-        }
-      }
-
-      free(T);
-    }
-  }
-
-  return e;
-}
-
 static int extract_min_with_ckey(softheap *P, int *ckey_into) {
   if(empty(P)) error(1,0, "Tried to extract an element from an empty soft heap");
   
@@ -278,12 +250,9 @@ static int extract_min_with_ckey(softheap *P, int *ckey_into) {
       remove_tree(P, T);
       if(T->next == NULL) { // we removed the highest-ranked tree; reset rank and clean up
         if(T->prev == NULL) P->rank = -1; // Heap now empty. Rank -1 is sentinel for future melds
-        else {
-          P->rank = T->prev->rank;
-          update_suffix_min(T->prev);
-        }
+        else P->rank = T->prev->rank;
       }
-
+      if(T->prev != NULL) update_suffix_min(T->prev);
       free(T);
     }
   }
@@ -291,30 +260,80 @@ static int extract_min_with_ckey(softheap *P, int *ckey_into) {
   return e;
 }
 
-#define N_ELEMENTS 5
-#define EPSILON 0.5
+#define N_ELEMENTS 1000000
+#define EPSILON 0.125
+#define MAGIC_PRIME_ONE 1399
+#define MAGIC_PRIME_TWO 1093
+
+
+static int intcmp(const void *one, const void *two) {
+  return *(int *)one - *(int *)two;
+}
 
 int main() {
-  srand(time(NULL));
-  int orig[N_ELEMENTS], results[N_ELEMENTS][2];
-
-  orig[0] = 0;
+  int sorted[N_ELEMENTS];
+  int results[N_ELEMENTS][2];
   softheap *P = makeheap(0, EPSILON);
-
+  
+  sorted[0] = 0;
+  printf("---------- COPRIME TESTS ----------\n\n");
   for(int i = 1; i < N_ELEMENTS; i++) {
-    orig[i] = i;
-    P = insert(P, i);
+    int num = MAGIC_PRIME_ONE * i % MAGIC_PRIME_TWO;
+    sorted[i] = num;
+    P = insert(P, num);
+  }
+
+  qsort(sorted, N_ELEMENTS, sizeof(int), intcmp);
+
+  int ckey_corruptions = 0, pos_corruptions = 0;
+  for(int i = 0; i < N_ELEMENTS; i++) {
+    results[i][0] = extract_min_with_ckey(P, &results[i][1]);
+    if(results[i][0] != results[i][1]) ckey_corruptions++;
+    if(results[i][0] != sorted[i]) pos_corruptions++;
+  }
+
+  printf("Results for inserting integers (%d * i %% %d) for i = 0 to to %d:\n", 
+         MAGIC_PRIME_ONE, MAGIC_PRIME_TWO, N_ELEMENTS - 1);
+  /* for(int i = 0; i < N_ELEMENTS; i++) { */
+  /*   printf("Rank %2d:\t sorted elem = %2d, extracted elem = %2d, ckey = %2d\n", i,  */
+  /*          sorted[i], results[i][0], results[i][1]);  */
+  /* } */
+
+  printf("\nTotal number of ckey corruptions: %d\nFraction corrupted: %4.3f\n", ckey_corruptions, 
+         (double)ckey_corruptions/N_ELEMENTS);
+  printf("\nTotal number of positional corruptions: %d\nFraction corrupted: %4.3f\n", pos_corruptions, 
+         (double)pos_corruptions/N_ELEMENTS);
+
+  printf("\n---------- RANDOM TESTS ----------\n\n");
+  long seed = 1462470053; //= time(NULL);
+  srand(seed);
+  printf("Random seed: %ld\n", seed);
+  ckey_corruptions = pos_corruptions = 0;
+  for(int i = 0; i < N_ELEMENTS; i++) {
+    int num = rand();
+    sorted[i] = num;
+    P = insert(P, num);
   }
 
   for(int i = 0; i < N_ELEMENTS; i++) {
-    results[i][0] = extract_min_with_ckey(P, (int *)(results) + sizeof(int) * i + 1);
+    results[i][0] = extract_min_with_ckey(P, &results[i][1]);
+    if(results[i][0] != results[i][1]) ckey_corruptions++;
+    if(results[i][0] != sorted[i]) pos_corruptions++;
   }
 
-  printf("Results for inserting integers 0 to %d:\n", N_ELEMENTS - 1);
-  for(int i = 0; i < N_ELEMENTS; i++) {
-    printf("Rank %2d:\t elem = %2d, ckey = %2d\n", i, results[i][0], results[i][1]); 
-  }
+  /* printf("Results for inserting %d random integers:\n", N_ELEMENTS); */
+  /* for(int i = 0; i < N_ELEMENTS; i++) { */
+  /*   printf("Rank %2d:\t sorted elem = %2d, extracted elem = %2d, ckey = %2d\n", i,  */
+  /*          sorted[i], results[i][0], results[i][1]);  */
+  /* } */
 
+  printf("\nTotal number of ckey corruptions: %d\nFraction corrupted: %4.3f\n", ckey_corruptions, 
+         (double)ckey_corruptions/N_ELEMENTS);
+  printf("\nTotal number of positional corruptions: %d\nFraction corrupted: %4.3f\n", pos_corruptions, 
+         (double)pos_corruptions/N_ELEMENTS);
+
+
+  
   free(P);
   return 0;
 }
