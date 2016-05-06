@@ -5,10 +5,10 @@
  * in exchange for reduced extract-min accuracy. The heap
  * takes a parameter epsilon and guarantees that in any sequence
  * of operations containing n inserts, there are never more than
- * (epsilon * n) elements in the heap traveling with priorities
- * higher than the priorities with which they are inserted
- * ("corrupted elements"). For a given value of epsilon,
- * insertion into the soft heap is amortized O(log_2 (1/epsilon)).
+ * epsilon * n "corrupted elements" in the heap: elements traveling 
+ * with priorities higher than the priorities with which they 
+ * were inserted. For a given value of epsilon, insertion into the 
+ * soft heap is amortized O(log_2 (1/epsilon)).
  */
 
 #ifndef SOFTHEAP_H
@@ -43,9 +43,45 @@ softheap *makeheap_empty(double epsilon);
  */
 bool empty(softheap *P);
 
-softheap *insert(softheap *P, int elem);
+/**
+ * Function: insert
+ * ----------------
+ * Inserts the parameter element into the soft heap pointed
+ * to by P.
+ */
+void insert(softheap *P, int elem);
+
+/**
+ * Function: meld
+ * --------------
+ * Destructively modifies soft heaps P and Q to merge their
+ * contents into a new soft heap that is returned.
+ */
 softheap *meld(softheap *P, softheap *Q);
+
+/**
+ * Function: extract_min
+ * ---------------------
+ * Extracts an element from soft heap P. Owing to the gimmick
+ * of the soft heap, this element is not guaranteed to be the
+ * element whose original inserted priority is lowest out
+ * of all elements currently in the heap. However, the element
+ * returned will have the minimum "stored priority" among all
+ * those that the heap is using to transport elements.
+ * Intuitively, then, this element is "close" to the min-priority
+ * element in the heap.
+ */
 int extract_min(softheap *P);
+
+/**
+ * Function: extract_min_with_ckey
+ * -------------------------------
+ * Extracts an element from soft heap P and stores the ckey of that
+ * element in the integer pointed to by ckey_into. The ckey is the 
+ * priority with which the returned element was traveling in the
+ * heap at the time of its extraction, and is an upper bound on 
+ * the true priority of the element.
+ */
 int extract_min_with_ckey(softheap *P, int *ckey_into);
 
 #endif // SOFTHEAP_H

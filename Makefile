@@ -1,4 +1,3 @@
-#
 # A simple makefile for building project composed of C source files.
 #
 # Julie Zelenski, for CS107, Sept 2014
@@ -7,27 +6,15 @@
 # It is likely that default C compiler is already gcc, but be explicit anyway
 CC = gcc
 
-# The line below controls the compiler settings for allocator.c
-# Edit here to by applying gcc optimization flags (-Ox and -fxxx)
-# Initially, the flags are configured for no optimization (to enable reliable
-# debugging) but when ready, you can experiment with different compiler settings
-# (e.g. different levels and enabling/disabling specific optimizations)
-# When you are ready to submit, be sure these flags are configured to
-# show your allocator in its best light!
-ALLOCATOR_EXTRA_CFLAGS = -O2 -finline-functions
-
-# The CFLAGS variable sets the flags for the compiler.  CS107 adds these flags:
-#  -g          compile with debug information
-#  -std=gnu99  use the C99 standard language definition with GNU extensions
-#  -Wall       turn on optional warnings (warnflags configures specific diagnostic warnings)
-# Do not edit here! Instead change ALLOCATOR_EXTRA_CFLAGS above
-CFLAGS = -g -std=gnu99 -Wall $$warnflags
+# The CFLAGS variable sets the flags for the compiler. 
+CFLAGS = -g -O3 -std=gnu99 -Wall $$warnflags
 export warnflags = -Wfloat-equal -Wtype-limits -Wpointer-arith -Wlogical-op -Wshadow -fno-diagnostics-show-option
 
 # The LDFLAGS variable sets flags for the linker and the LDLIBS variable lists
-# additional libraries being linked. The standard libc is linked by default.
-LDFLAGS = 
-LDLIBS = -lm
+# additional libraries being linked. The standard libc is linked by default
+# We additionally require the library for CVector/CMap, so it is noted here
+LDFLAGS = -L.
+LDLIBS = -lsoftheap -lm
 
 # Configure build tools to emit code for IA32 architecture by adding the necessary
 # flag to compiler and linker
@@ -35,8 +22,11 @@ LDLIBS = -lm
 # LDFLAGS += -m32
 
 # The line below defines the variable 'PROGRAMS' to name all of the executables
-# to be built by this makefile
-PROGRAMS = softheap
+# to be built by this makefile.  If you write additional client programs,
+# add them to the list below so they can be built using make. The programs
+# named in this list will be compiled from a similarly-named .c file (i.e.
+# the program vectest is built from client program vectest.c)
+PROGRAMS = softheap-test
 
 # The line below defines a target named 'all', configured to trigger the
 # build of everything named in the 'PROGRAMS' variable. The first target
@@ -45,38 +35,40 @@ PROGRAMS = softheap
 all:: $(PROGRAMS)
 
 # The entry below is a pattern rule. It defines the general recipe to make
-# the 'name.o' object file by compiling the 'name.c' source file.
-%.o: %.c
-	$(COMPILE.c) $< -o $@
+# the 'name.o' object file by compiling the 'name.c' source file. It also
+# lists cvector.h and cmap.h to be treated as prerequisites.
+%.o: %.c softheap.h
+	$(COMPILE.c) -I. $< -o $@
 
 # This pattern rule defines the general recipe to make the executable 'name'
-# by linking the 'name.o' object file and any other .o prerequisites. The 
+# by linking the 'name.o' object file and any other .o prerequisites. The
 # rule is used for all executables listed in the PROGRAMS definition above.
-$(PROGRAMS): %:%.o 
+# The client programs need to be rebuilt if library is updated, so
+# add as a prerequisite. 
+$(PROGRAMS): %:%.o libsoftheap.a
 	$(LINK.o) $(filter %.o,$^) $(LDLIBS) -o $@
+
+# These pattern rules disable implicit rules for executables
+# by supplying empty recipe. Accidentally attempting to build
+# cvector gives confusing failure from implicit rules, if disabled
+# build stops right away and reports "No rule"
+%: %.c
+%: %.o
 
 # Specific per-target customizations and prerequisites are listed here
 
-$(PROGRAMS): %:%.o 
-
-# Do not edit here! Instead change ALLOCATOR_EXTRA_CFLAGS above.
-# Below are the default build settings for the other modules. In grading, we compile
-# all modules other than your allocator with the default build settings from starter.
-# Any changes you make here will be ignored in grading.  Changing these settings
-# in development could cause your observed results to not match the grading results.
-alloctest.o segment.o fcyc.o simple.o : CFLAGS += -O0
-allocator.o: CFLAGS += $(ALLOCATOR_EXTRA_CFLAGS)
-allocator.o: Makefile
-
+# Custom rule to build library (Make has no implicit rule for .a) from our .o files
+# marking the object files as intermediate will discard them after folding into library.
+# Use D flag for "deterministic" mode, internal timestamps are zeros, library binary 
+# will be unchanged from recompile if no source change
+ARFLAGS = rvD
+libsoftheap.a: softheap.o
+	$(AR) $(ARFLAGS) $@ $?
+.INTERMEDIATE: softheap.o
 
 # The line below defines the clean target to remove any previous build results
 clean::
-	rm -f $(PROGRAMS) *.o callgrind.out.* *~
+	rm -f $(PROGRAMS) $(SOLN_PROGRAMS) libsoftheap.a core *.o callgrind.out.* *~
 
 # PHONY is used to mark targets that don't represent actual files/build products
-.PHONY: clean all
-
-# The line below tries to include our master Makefile, which we use internally.
-# The - means that it is not an error if this file can't be found (which will
-# normally be the case). You can just ignore this line.
--include Makefile.grading
+.PHONY: clean all soln
