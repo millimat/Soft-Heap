@@ -1,28 +1,22 @@
+/* File: softheap.c
+ * ----------------
+ * Implementation of a soft heap. Rather than the version using binomial trees
+ * introduced in Chazelle's original paper, this soft heap uses binary trees
+ * according to the strategy outlined in Kaplan/Zwick.
+ */
+
+#include "softheap.h"
+
 #include <stdlib.h>
-#include <stdio.h>
-#include <assert.h>
-#include <error.h>
-#include <stdbool.h>
-#include <math.h> // Remember to link math library!
-#include <time.h> // to set rand
+#include <assert.h> // for assert
+#include <error.h> // for error
+#include <math.h> // For log and ceil. Remember to link math library!
 
-typedef struct LISTCELL {
-  int elem;
-  struct LISTCELL *prev, *next;
-} cell;
-
-typedef struct TREENODE {
-  struct TREENODE *left, *right;
-  struct LISTCELL *first, *last;
-  int ckey, rank, size, nelems;
-} node;
-
-typedef struct TREE {
-  struct TREE *prev, *next, *sufmin;
-  struct TREENODE *root;
-  int rank;
-} tree;
-
+/* Structure representing a soft heap. The soft heap object has access
+ * to the first tree in its root list, the rank of the highest-order tree
+ * in its root list, its error parameter epsilon, and the parameter
+ * r(epsilon) that defines the maximum node rank for which a node 
+ * is guaranteed to contain only uncorrupted elements. */
 typedef struct SOFTHEAP {
   struct TREE *first;
   int rank;
@@ -30,42 +24,93 @@ typedef struct SOFTHEAP {
   int r;
 } softheap;
 
-static inline bool leaf(node *x) {
-  return (x->left == NULL && x->right == NULL);
+/* Structure representing a binary tree in a soft heap's rootlist. The tree stores
+ * its rank, which is the maximum possible height of its root (although the
+ * root is not guaranteed to have that height at all times). The tree
+ * is wired to its predecessor and successor in the rootlist, which have
+ * rank less than and greater than this tree's rank, respectively. 
+ * The tree also has a pointer to its own root.
+ * 
+ * Binary trees in a soft-heap are heap-ordered according to the "ckeys" of the nodes
+ * in the trees. Each node stores a list of items under one ckey; the ckey is 
+ * an upper bound on the original priorities of all items in the node's list.
+ * The final element of a softheap tree is a pointer "sufmin" to the tree of minimum
+ * root ckey in the segment of the rootlist beginning at this tree.
+ */
+typedef struct TREE {
+  struct TREE *prev, *next, *sufmin;
+  struct TREENODE *root;
+  int rank;
+} tree;
+
+/* A node in a tree in a soft heap. The node has access to its left and right children,
+ * but does not need access to its parent. It contains a ckey (its priority), its rank,
+ * the number of elements in its list, and its "size": a parameter defined such that
+ * its list always contains Theta(size) elements so long as the node is not a leaf. 
+ * Its list is stored as a doubly linked list. */
+typedef struct TREENODE {
+  struct TREENODE *left, *right;
+  struct LISTCELL *first, *last;
+  int ckey, rank, size, nelems;
+} node;
+
+/* An item in a soft heap tree node's list. */
+typedef struct LISTCELL {
+  int elem;
+  struct LISTCELL *prev, *next;
+} cell;
+
+/************************************** HEAP & ITEM CREATION ***********************************/
+
+/* Function: makeheap
+ * ------------------
+ * Construct a soft heap with error parameter epsilon containing element elem.
+ * This is done by constructing a tree of rank 0 containing a single rank-0
+ * node. The node has one item in its item list, which is the item inserted.
+ */
+softheap *makeheap(int elem, double epsilon) {
+  softheap *s = makeheap_empty(epsilon);
+  s->first = maketree(elem);
+  s->rank = 0;
+  return s;
 }
 
-static inline void swapLR(node *x) {
-  node *tmp = x->left;
-  x->left = x->right;
-  x->right = tmp;
+/* Function: makeheap_empty
+ * ------------------------
+ * Constructs an empty soft heap with the provided error parameter.
+ */
+softheap *makeheap_empty(double epsilon) {
+  // Ensure error parameter is valid
+  if(epsilon <= 0 || epsilon >= 1) error(1,0, "Soft heap error parameter must fall in (0,1)");
+  
+  softheap *s = malloc(sizeof(softheap));
+  s->first = NULL;
+  s->rank = -1; // Ensures that any insertion will just return the SH containing the inserted elem
+  s->epsilon = epsilon;
+  s->r = get_r(epsilon);
+  return s;
 }
 
-static inline bool empty(softheap *P) {
-  return P->first == NULL;
+/* Function: maketree
+ * ------------------
+ * Constructs a soft heap binary tree consisting of exactly one node
+ * housing the parameter element.
+ */
+static tree *maketree(int elem) {
+  tree *T = malloc(sizeof(tree));
+  T->root = makenode(elem);
+  T->prev = T->next = NULL;
+  T->rank = 0;
+  T->sufmin = T;
+  return T;
 }
 
-static void moveList(node *src, node *dst) {
-  assert(src->first != NULL);
-  if(dst->last != NULL) dst->last->next = src->first;
-  if(dst->first == NULL) dst->first = src->first;
-  src->first->prev = dst->last;
-  dst->last = src->last;
-    
-  dst->nelems += src->nelems;
-  src->nelems = 0;
-  src->first = src->last = NULL;  
-}
-
-// make new list cell and concat to end of list
-static cell *addcell(int elem, cell *listend) {
-  cell *c = malloc(sizeof(cell));
-  c->elem = elem;
-  c->prev = listend;
-  if(listend != NULL) listend->next = c;
-  c->next = NULL;
-  return c;
-}
-
+/* Function: makenode
+ * ------------------
+ * Constructs a rank-0 soft heap binary tree node containing just the parameter
+ * element. Its ckey matches the element, since that element is the only
+ * object in its list.
+ */
 static node *makenode(int elem) {
   node *x = malloc(sizeof(node));
   x->first = x->last = addcell(elem, NULL);
@@ -76,22 +121,68 @@ static node *makenode(int elem) {
   return x;
 }
 
-static tree *maketree(int elem) {
-  tree *T = malloc(sizeof(tree));
-  T->root = makenode(elem);
-  T->prev = T->next = NULL;
-  T->rank = 0;
-  T->sufmin = T;
-  return T;
+
+/* Function: addcell
+ * -----------------
+ * Creates a list cell containing the parameter element
+ * and concatenates it to the end of the linked list pointed
+ * to by listend.
+ */
+static cell *addcell(int elem, cell *listend) {
+  cell *c = malloc(sizeof(cell));
+  c->elem = elem;
+  c->prev = listend;
+  if(listend != NULL) listend->next = c;
+  c->next = NULL;
+  return c;
 }
 
-static softheap *makeheap(int elem, double epsilon) {
-  softheap *s = malloc(sizeof(softheap));
-  s->first = maketree(elem);
-  s->rank = 0;
-  s->epsilon = epsilon;
-  s->r = ceil(log(epsilon)/log(2)) + 5; // max guaranteed uncorrupted rank
-  return s;
+ 
+/************************************** UTILITY FUNCTIONS ***********************************/
+
+/* Function: leaf
+ * --------------
+ * Return true if and only if this soft heap tree node
+ * has no children. 
+ */
+static inline bool leaf(node *x) {
+  return (x->left == NULL && x->right == NULL);
+}
+
+/* Function: swapLR 
+ * ----------------
+ * Swap the left and right children of this node.
+ */
+static inline void swapLR(node *x) {
+  node *tmp = x->left;
+  x->left = x->right;
+  x->right = tmp;
+}
+
+/* Function: get_r
+ * ---------------
+ * Return the parameter r(epsilon) for this soft heap.
+ * r is the largest integer such that a node of that rank
+ * contains only uncorrupted elements.
+ */
+static inline int get_r(double epsilon) {
+  return ceil(log(epsilon)/log(2)) + 5;
+}
+
+bool empty(softheap *P) {
+  return P->first == NULL;
+}
+
+static void moveList(node *src, node *dst) {
+  assert(src->first != NULL);
+  if(dst->last != NULL) dst->last->next = src->first;
+  if(dst->first == NULL) dst->first = src->first;
+  src->first->prev = dst->last;
+  dst->last = src->last;
+
+  dst->nelems += src->nelems;
+  src->nelems = 0;
+  src->first = src->last = NULL;  
 }
 
 static void sift(node *x) {
@@ -150,10 +241,10 @@ static void remove_tree(softheap *outof_heap, tree *removed) {
 // Put the trees of soft heap P into soft heap Q. Q->rank >= P->rank.
 // On termination, Q will contain all trees from P and Q, in increasing rank order.
 static void merge_into(softheap *P, softheap *Q) {
-  
+
 
   tree *currP = P->first, *currQ = Q->first;
-  
+
   while(currP != NULL) {
     while(currQ->rank < currP->rank) currQ = currQ->next;
     // currQ is now the first tree in Q with rank >= currP. Insert currP before it.
@@ -191,11 +282,11 @@ static void repeated_combine(softheap *Q, int smaller_rank, int r) {
 }
 
 
-static softheap *meld(softheap *P, softheap *Q) {
+softheap *meld(softheap *P, softheap *Q) {
   if(P->epsilon - Q->epsilon > 0.001) {
     error(1,0, "Tried to combine softheaps with different epsilons");
   }
-  
+
   softheap *result;
   if(P->rank > Q->rank) { // meld Q into P
     merge_into(Q, P);
@@ -212,7 +303,9 @@ static softheap *meld(softheap *P, softheap *Q) {
   return result;
 }
 
-static softheap *insert(softheap *P, int elem) {
+
+// make void by setting *P = meld? 
+softheap *insert(softheap *P, int elem) {
   return meld(P, makeheap(elem, P->epsilon));
 }
 
@@ -221,7 +314,7 @@ static int extract_elem(node *x) {
   assert(x->first != NULL);
   cell *todelete = x->first;
   int result = todelete->elem;
-  
+
   x->first = todelete->next;
   if(x->first != NULL) {
     if(x->first->next == NULL) x->last = x->first;
@@ -233,9 +326,14 @@ static int extract_elem(node *x) {
   return result;
 }
 
-static int extract_min_with_ckey(softheap *P, int *ckey_into) {
+int extract_min(softheap *P) {
+  int filler;
+  return extract_min_with_ckey(P, &filler);
+}
+
+int extract_min_with_ckey(softheap *P, int *ckey_into) {
   if(empty(P)) error(1,0, "Tried to extract an element from an empty soft heap");
-  
+
   tree *T = P->first->sufmin; // tree with lowest root ckey
   node *x = T->root;
   int e = extract_elem(x);
@@ -260,80 +358,4 @@ static int extract_min_with_ckey(softheap *P, int *ckey_into) {
   return e;
 }
 
-#define N_ELEMENTS 1000000
-#define EPSILON 0.125
-#define MAGIC_PRIME_ONE 1399
-#define MAGIC_PRIME_TWO 1093
-
-
-static int intcmp(const void *one, const void *two) {
-  return *(int *)one - *(int *)two;
-}
-
-int main() {
-  int sorted[N_ELEMENTS];
-  int results[N_ELEMENTS][2];
-  softheap *P = makeheap(0, EPSILON);
-  
-  sorted[0] = 0;
-  printf("---------- COPRIME TESTS ----------\n\n");
-  for(int i = 1; i < N_ELEMENTS; i++) {
-    int num = MAGIC_PRIME_ONE * i % MAGIC_PRIME_TWO;
-    sorted[i] = num;
-    P = insert(P, num);
-  }
-
-  qsort(sorted, N_ELEMENTS, sizeof(int), intcmp);
-
-  int ckey_corruptions = 0, pos_corruptions = 0;
-  for(int i = 0; i < N_ELEMENTS; i++) {
-    results[i][0] = extract_min_with_ckey(P, &results[i][1]);
-    if(results[i][0] != results[i][1]) ckey_corruptions++;
-    if(results[i][0] != sorted[i]) pos_corruptions++;
-  }
-
-  printf("Results for inserting integers (%d * i %% %d) for i = 0 to to %d:\n", 
-         MAGIC_PRIME_ONE, MAGIC_PRIME_TWO, N_ELEMENTS - 1);
-  /* for(int i = 0; i < N_ELEMENTS; i++) { */
-  /*   printf("Rank %2d:\t sorted elem = %2d, extracted elem = %2d, ckey = %2d\n", i,  */
-  /*          sorted[i], results[i][0], results[i][1]);  */
-  /* } */
-
-  printf("\nTotal number of ckey corruptions: %d\nFraction corrupted: %4.3f\n", ckey_corruptions, 
-         (double)ckey_corruptions/N_ELEMENTS);
-  printf("\nTotal number of positional corruptions: %d\nFraction corrupted: %4.3f\n", pos_corruptions, 
-         (double)pos_corruptions/N_ELEMENTS);
-
-  printf("\n---------- RANDOM TESTS ----------\n\n");
-  long seed = 1462470053; //= time(NULL);
-  srand(seed);
-  printf("Random seed: %ld\n", seed);
-  ckey_corruptions = pos_corruptions = 0;
-  for(int i = 0; i < N_ELEMENTS; i++) {
-    int num = rand();
-    sorted[i] = num;
-    P = insert(P, num);
-  }
-
-  for(int i = 0; i < N_ELEMENTS; i++) {
-    results[i][0] = extract_min_with_ckey(P, &results[i][1]);
-    if(results[i][0] != results[i][1]) ckey_corruptions++;
-    if(results[i][0] != sorted[i]) pos_corruptions++;
-  }
-
-  /* printf("Results for inserting %d random integers:\n", N_ELEMENTS); */
-  /* for(int i = 0; i < N_ELEMENTS; i++) { */
-  /*   printf("Rank %2d:\t sorted elem = %2d, extracted elem = %2d, ckey = %2d\n", i,  */
-  /*          sorted[i], results[i][0], results[i][1]);  */
-  /* } */
-
-  printf("\nTotal number of ckey corruptions: %d\nFraction corrupted: %4.3f\n", ckey_corruptions, 
-         (double)ckey_corruptions/N_ELEMENTS);
-  printf("\nTotal number of positional corruptions: %d\nFraction corrupted: %4.3f\n", pos_corruptions, 
-         (double)pos_corruptions/N_ELEMENTS);
-
-
-  
-  free(P);
-  return 0;
-}
+int main() {}

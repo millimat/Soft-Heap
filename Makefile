@@ -31,8 +31,8 @@ LDLIBS = -lm
 
 # Configure build tools to emit code for IA32 architecture by adding the necessary
 # flag to compiler and linker
-CFLAGS += -m32
-LDFLAGS += -m32
+# CFLAGS += -m32
+# LDFLAGS += -m32
 
 # The line below defines the variable 'PROGRAMS' to name all of the executables
 # to be built by this makefile
