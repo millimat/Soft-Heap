@@ -79,7 +79,7 @@ static inline bool leaf(node *x) {
  * contains only uncorrupted elements.
  */
 static inline int get_r(double epsilon) {
-  return ceil(log(epsilon)/log(2)) + 5;
+  return ceil(-log(epsilon)/log(2)) + 5;
 }
 
 /* Function: max 
