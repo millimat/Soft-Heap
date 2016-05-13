@@ -196,7 +196,49 @@ softheap *makeheap_empty(double epsilon) {
   return s;
 }
 
-/************************************* HEAP STRUCTURE MANIPULATION **********************************/ 
+/* Function: destroy_node
+ * ----------------------
+ * Deallocates all the cells in this node's item list,
+ * recursively destroys its left and right children, 
+ * then deallocates its memory. For use in destroy_heap.
+ */
+static void destroy_node(node *treenode) {
+  if(treenode == NULL) return;
+  
+  cell *curr = treenode->first, *next;
+  while(curr != NULL) {
+    next = curr->next;
+    free(curr);
+    curr = next;
+  }
+
+  destroy_node(treenode->left);
+  destroy_node(treenode->right);
+  free(treenode);
+}
+
+/* Function: destroy_heap
+ * ----------------------
+ * Destroys this soft heap and deallocates all its associated memory
+ * by iterating over its list of trees, destroying them all, and then
+ * destroying the heap struct.
+ */
+void destroy_heap(softheap *P) {
+  if(P == NULL) return;
+
+  tree *curr = P->first, *next;
+  while(curr != NULL) {
+    next = curr->next;
+    destroy_node(curr->root);
+    free(curr);
+    curr = next;
+  }  
+
+  free(P);
+}
+
+
+/************************************ HEAP STRUCTURE MANIPULATION *********************************/
 
 /* Function: moveList
  * ------------------
@@ -331,7 +373,7 @@ static void merge_into(softheap *P, softheap *Q) {
   }
 }
 
-/* Function: repeated-combine
+/* Function: repeated_combine
  * --------------------------
  * The second step of soft heap melding. Now that all trees of equal rank from the
  * original two heaps are adjacent in the larger heap, this process simulates
@@ -490,7 +532,7 @@ int extract_min_with_ckey(softheap *P, int *ckey_into) {
       free(x);
       remove_tree(P, T);
 
-      if(T->next == NULL) { // we removed the highest-ranked tree; reset rank and clean up
+      if(T->next == NULL) { // we removed the highest-ranked tree; reset heap rank and clean up
         if(T->prev == NULL) P->rank = -1; // Heap now empty. Rank -1 is sentinel for future melds
         else P->rank = T->prev->rank;
       }

@@ -26,7 +26,7 @@ LDLIBS = -lsoftheap -lm
 # add them to the list below so they can be built using make. The programs
 # named in this list will be compiled from a similarly-named .c file (i.e.
 # the program vectest is built from client program vectest.c)
-PROGRAMS = softheap-test
+PROGRAMS = run-tests
 
 # The line below defines a target named 'all', configured to trigger the
 # build of everything named in the 'PROGRAMS' variable. The first target

@@ -36,6 +36,14 @@ softheap *makeheap(int elem, double epsilon);
 softheap *makeheap_empty(double epsilon);
 
 /**
+ * Function: destroy_heap
+ * ----------------------
+ * Destroys this soft heap and deallocates all the memory
+ * associated with it.
+ */
+void destroy_heap(softheap *P);
+
+/**
  * Function: empty
  * ---------------
  * A boolean returning true if and only if the soft heap
