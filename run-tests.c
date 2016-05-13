@@ -34,6 +34,7 @@ static void straight_test(int elems[], int results[][2]) {
   int ckey_corruptions = 0, pos_corruptions = 0;
   printf("Extracting elements with ckeys...\n");
   for(int i = 0; i < N_ELEMENTS; i++) {
+    results[i][0] = extract_min_with_ckey(P, &results[i][1]);
     if(results[i][0] < results[i][1]) ckey_corruptions++;
     if(results[i][0] != elems[i]) pos_corruptions++;
   }
