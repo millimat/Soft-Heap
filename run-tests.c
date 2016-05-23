@@ -4,9 +4,9 @@
 #include "softheap.h"
 
 
-#define N_ELEMENTS (1 << 18)
+#define N_ELEMENTS (1 << 20)
 #define SORTED_EPSILON ((double)1 / N_ELEMENTS)
-#define EPSILON 0.1
+#define EPSILON 0.3
 #define MAGIC_PRIME_ONE 1399
 #define MAGIC_PRIME_TWO 1093
 
@@ -34,7 +34,7 @@ static void report_corruptions(int ckey_corruptions, int pos_corruptions, int ne
 static void forwards_test(int elems[], int results[][2]) {
   printf("----------FORWARDS TEST----------\n");
   printf("Inserting integers 0 to %d into a soft heap...\n", N_ELEMENTS - 1);
-  softheap *P = makeheap_empty(SORTED_EPSILON);
+  softheap *P = makeheap_empty(EPSILON);
   for(int i = 0; i < N_ELEMENTS; i++) {
     elems[i] = i;
     insert(P, i);
@@ -112,7 +112,7 @@ static void random_test(int elems[], int results[][2]) {
 
   softheap *P = makeheap_empty(EPSILON);
   for(int i = 0; i < N_ELEMENTS; i++) {
-    int num = rand() % N_ELEMENTS;
+    int num = rand();
     elems[i] = num;
     insert(P, num);
   }
@@ -154,7 +154,7 @@ static void cleanup_test() {
     if(i % 10 == 9) printf("\n");
   }
 
-  printf("Done.\n\n");
+  printf("Success!\n\n");
 }
 
 int main() {
@@ -166,5 +166,6 @@ int main() {
   coprime_test(sorted, results);
   random_test(sorted, results);
   cleanup_test();
+
   return 0;
 }

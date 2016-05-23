@@ -14,7 +14,7 @@ export warnflags = -Wfloat-equal -Wtype-limits -Wpointer-arith -Wlogical-op -Wsh
 # additional libraries being linked. The standard libc is linked by default
 # We additionally require the library for CVector/CMap, so it is noted here
 LDFLAGS = -L.
-LDLIBS = -lsoftheap -lm
+LDLIBS = -lheaps -lm
 
 # Configure build tools to emit code for IA32 architecture by adding the necessary
 # flag to compiler and linker
@@ -26,7 +26,7 @@ LDLIBS = -lsoftheap -lm
 # add them to the list below so they can be built using make. The programs
 # named in this list will be compiled from a similarly-named .c file (i.e.
 # the program vectest is built from client program vectest.c)
-PROGRAMS = run-tests
+PROGRAMS = run-tests sorts
 
 # The line below defines a target named 'all', configured to trigger the
 # build of everything named in the 'PROGRAMS' variable. The first target
@@ -35,9 +35,8 @@ PROGRAMS = run-tests
 all:: $(PROGRAMS)
 
 # The entry below is a pattern rule. It defines the general recipe to make
-# the 'name.o' object file by compiling the 'name.c' source file. It also
-# lists cvector.h and cmap.h to be treated as prerequisites.
-%.o: %.c softheap.h
+# the 'name.o' object file by compiling the 'name.c' source file. 
+%.o: %.c softheap.h binheap.c
 	$(COMPILE.c) -I. $< -o $@
 
 # This pattern rule defines the general recipe to make the executable 'name'
@@ -45,7 +44,7 @@ all:: $(PROGRAMS)
 # rule is used for all executables listed in the PROGRAMS definition above.
 # The client programs need to be rebuilt if library is updated, so
 # add as a prerequisite. 
-$(PROGRAMS): %:%.o libsoftheap.a
+$(PROGRAMS): %:%.o libheaps.a
 	$(LINK.o) $(filter %.o,$^) $(LDLIBS) -o $@
 
 # These pattern rules disable implicit rules for executables
@@ -62,13 +61,13 @@ $(PROGRAMS): %:%.o libsoftheap.a
 # Use D flag for "deterministic" mode, internal timestamps are zeros, library binary 
 # will be unchanged from recompile if no source change
 ARFLAGS = rvD
-libsoftheap.a: softheap.o
+libheaps.a: softheap.o binheap.o
 	$(AR) $(ARFLAGS) $@ $?
-.INTERMEDIATE: softheap.o
+.INTERMEDIATE: softheap.o binheap.o
 
 # The line below defines the clean target to remove any previous build results
 clean::
-	rm -f $(PROGRAMS) $(SOLN_PROGRAMS) libsoftheap.a core *.o callgrind.out.* *~
+	rm -f $(PROGRAMS) libheaps.a core *.o callgrind.out.* *~
 
 # PHONY is used to mark targets that don't represent actual files/build products
-.PHONY: clean all soln
+.PHONY: clean all

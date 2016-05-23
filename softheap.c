@@ -476,6 +476,12 @@ softheap *meld(softheap *P, softheap *Q) {
   double eps_off = 1 - min_eps/max_eps; 
   if(eps_off > 0.001) error(1,0, "Tried to combine soft heaps with different epsilons");
 
+  // If both softheaps empty, just destroy one and return the other
+  if(empty(P) && empty(Q)) {
+    free(P);
+    return Q;
+  }
+
   softheap *result;
   if(P->rank >= Q->rank) { // meld Q into P
     merge_into(Q, P);
@@ -512,8 +518,8 @@ int extract_min(softheap *P) {
  * After removing that element from the root, we check whether it is now
  * size-deficient. If so, we sift it (if it has children), ignore it
  * (if it has no children but is not empty), or destroy the tree 
- * it roots (if it has no children and is empty). 
- * Once this is done, we update the sufmin pointers of T and all its predecessors
+ * it roots (if it has no children and is empty). Once this is done, we
+ * update the sufmin pointers of T and all its predecessors
  * (or just T's predecessors if T was removed).
  */
 int extract_min_with_ckey(softheap *P, int *ckey_into) {
