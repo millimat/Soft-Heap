@@ -206,11 +206,11 @@ static void time_sort(int *A, size_t length, sorter sort, char *sort_name) {
   // printf("Timing %s on array...\n", sort_name);
 
   clock_t tick = clock();
-  sort(A, length);
+  sort(B, length);
   clock_t tock = clock();
   double elapsed_secs = (double)(tock - tick) / CLOCKS_PER_SEC;
   
-  if(!sorted(A, length)) error(1,0, "%s failed", sort_name);
+  if(!sorted(B, length)) error(1,0, "%s failed", sort_name);
   // printf("Success.\n");
   printf("%s\t %4.6f \n", sort_name, elapsed_secs);  
 }
