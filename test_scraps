@@ -1,0 +1,33 @@
+  softheap *P = makeheap_empty(0.99);
+  softheap *Q = makeheap_empty(0.99);
+  
+  int count = 0;
+  
+  for(int i = 0; i < 100; i++) {
+    int j1 = rand() % 3, j2 = rand() % 3;
+    for(int j = 0; j < j1; j++, count++) insert(P, -1 * (rand() % 30));
+    for(int j = 0; j < j2; j++, count++) insert(P, rand() % 30);
+  }
+  
+  for(int i = 0; i < 100; i++) {
+    int j1 = rand() % 5, j2 = rand() % 5;
+    for(int j = 0; j < j1; j++, count++) insert(Q, -1 * (rand() % 30));
+    for(int j = 0; j < j2; j++, count++) insert(Q, rand() % 30);
+  }
+
+  for(int i = 0; i < 100; i++, count-= 2) {
+    extract_min(P);
+    extract_min(Q);
+  }
+  
+  Q = meld(P,Q);
+
+  for(; count > 30; count--) {
+    insert(Q, (-1 + (rand() % 1)) * (rand() % 30));
+    extract_min(Q);
+    insert(Q, rand() % 30);
+    extract_min(Q);
+    extract_min(Q);
+  }
+
+  destroy_heap(Q);
