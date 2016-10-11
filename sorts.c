@@ -198,12 +198,12 @@ static void radix_sort(int *A, size_t length) {
 /* Call the sorting algorithm of choice on a copy on the original array of
  * random elements. Report timing results. */
 static void time_sort(int *A, size_t length, sorter sort, char *sort_name) {
-  //  printf("----------------- Timing %s ------------------\n", sort_name);
-  //  printf("Making copy of original array...\n");
+  printf("----------------- Timing %s ------------------\n", sort_name);
+  printf("Making copy of original array...\n");
   int B[length];
   memcpy(B, A, length * sizeof(int));
 
-  // printf("Timing %s on array...\n", sort_name);
+  printf("Timing %s on array...\n", sort_name);
 
   clock_t tick = clock();
   sort(B, length);
@@ -211,8 +211,8 @@ static void time_sort(int *A, size_t length, sorter sort, char *sort_name) {
   double elapsed_secs = (double)(tock - tick) / CLOCKS_PER_SEC;
   
   if(!sorted(B, length)) error(1,0, "%s failed", sort_name);
-  // printf("Success.\n");
-  printf("%s\t %4.6f s \n", sort_name, elapsed_secs);  
+  printf("Success.\n");
+  printf("%s\t %4.6f s \n\n", sort_name, elapsed_secs);  
 }
 
 
@@ -249,12 +249,12 @@ int main(int argc, char *argv[]) {
 
   long long seed = time(NULL);
   srand(seed);
-  //  printf("Random seed: %lld\n", seed);
+  printf("Random seed: %lld\n", seed);
 
-  //  printf("Creating a template array of %d random elements...\n", nelems);
+  printf("Creating a template array of %d random elements...\n", nelems);
   int A[nelems];
   for(int i = 0; i < nelems; i++) A[i] = rand();
-  //  printf("Done. Starting tests...\n\n");
+  printf("Done. Starting tests...\n\n");
 
   time_mergesort(A, nelems);
   time_heapsort(A, nelems);
